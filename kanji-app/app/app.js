@@ -845,6 +845,7 @@
       $("#phatS").setAttribute("aria-pressed", String(tuPhat));
     });
     $("#modeS").addEventListener("click", () => {
+      if (s.busy) return;  // đang chấm hoặc đang tải thẻ
       hocNguoc = !hocNguoc;
       store.set("tk-hoc-nguoc", hocNguoc);
       if (!s.shown) nextCard(true); else { $("#modeS").textContent = "Học ngược: " + (hocNguoc ? "Bật" : "Tắt"); $("#modeS").setAttribute("aria-pressed", String(hocNguoc)); }
@@ -883,10 +884,28 @@
     stopAudio();
     try {
       await s.showP;
-      if (!(await anki.call("guiAnswerCard", { ease }))) throw new Error("Anki không nhận câu trả lời. Hãy kiểm tra cửa sổ Anki đang ở màn hình ôn tập.");
+      let ok = await anki.call("guiAnswerCard", { ease });
+      if (!ok) {
+        // Cửa sổ Anki đã rời màn hình ôn tập: mở lại deck. Chỉ chấm khi Anki đưa lại đúng thẻ đang xem,
+        // không thì hiện thẻ Anki đưa ra và không chấm gì (tránh chấm nhầm thẻ chưa xem).
+        try { await anki.call("guiDeckReview", { name: s.deck }); } catch (er) {}
+        const c = await currentCard(null);
+        if (c && c.cardId === s.cur.cardId) {
+          await anki.call("guiShowAnswer");
+          ok = await anki.call("guiAnswerCard", { ease });
+        } else {
+          s.shown = false;
+          await nextCard(true);
+          s.busy = false;
+          return;
+        }
+      }
+      if (!ok) throw new Error("Anki không nhận câu trả lời. Hãy kiểm tra cửa sổ Anki đang ở màn hình ôn tập.");
       s.done++;
+      // Giữ "đang bận" và coi như chưa lật cho tới khi thẻ sau hiện ra: bấm phím hai lần liền không chấm luôn thẻ sau.
+      s.shown = false;
+      await nextCard();
       s.busy = false;
-      nextCard();
     } catch (e) {
       s.busy = false;
       const n = document.createElement("div");
@@ -903,10 +922,14 @@
     s.busy = true; stopAudio();
     let ok = false;
     try { ok = await anki.call("guiUndo"); } catch (e) { ok = false; }
-    s.busy = false;
-    if (!ok) return bao("Anki không hoàn tác được.");
+    if (!ok) { s.busy = false; return bao("Anki không hoàn tác được."); }
     s.done--;
-    await nextCard();
+    s.shown = false;
+    // Anki đã hoàn tác trong bộ sưu tập nhưng chỉ vẽ lại màn hình ôn tập khi cửa sổ Anki được chọn:
+    // mở lại deck để Anki đưa thẻ vừa hoàn tác lên, rồi lấy thẻ đó (không chờ đổi thẻ).
+    try { await anki.call("guiDeckReview", { name: s.deck }); } catch (e) {}
+    await nextCard(true);
+    s.busy = false;
     bao("Đã hoàn tác lần chấm trước.");
   }
   // Nghe lại: mặt sau thì phát như khi lật thẻ; mặt trước chỉ phát ở chế độ thường
