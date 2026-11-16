@@ -430,15 +430,17 @@
   // Tích một ô contribution trên GitHub: server ghi một dòng vào repo nhật ký học rồi commit.
   const dongGop = (text, once) => fetch("/api/dong-gop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, once }) })
     .then(r => r.ok ? r.json() : null).catch(() => null);
-  // Thẻ Anki đang hiện. Sau khi chấm, Anki chuyển thẻ trong nền: hỏi lại vài lần (cách 50ms) khi vẫn thấy thẻ cũ
-  // hoặc chưa thấy thẻ nào, thay cho việc chờ cố định. Cùng một thẻ quay lại thật (deck chỉ còn một thẻ) thì vẫn nhận sau vài lần.
+  // Thẻ Anki đang hiện. Sau khi chấm, Anki chuyển thẻ trong nền: hỏi lại (cách 60ms) chừng nào còn thấy thẻ cũ
+  // hoặc chưa thấy thẻ nào, tối đa 1,5 giây, thay cho việc chờ cố định. Có thẻ mới là dùng ngay; hết 1,5 giây mà vẫn
+  // là thẻ cũ thì đó là thẻ quay lại thật (deck chỉ còn thẻ này), vẫn không có thẻ thì deck đã xong.
   async function currentCard(prevId) {
+    const het = Date.now() + 1500;
     let c = null;
-    for (let i = 0; i < 6; i++) {
+    do {
       try { c = await anki.call("guiCurrentCard"); } catch (e) { c = null; }
       if (c && c.cardId !== prevId) return c;
-      await new Promise(r => setTimeout(r, 50));
-    }
+      await new Promise(r => setTimeout(r, 60));
+    } while (Date.now() < het);
     return c;
   }
   async function deckCounts(deck) {
