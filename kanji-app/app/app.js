@@ -381,17 +381,30 @@
       $("#retry").addEventListener("click", renderDecks);
       return;
     }
-    studyEl.innerHTML = `<div class="notice">Đang tải danh sách deck…</div>`;
-    const names = (await anki.call("deckNames")).filter(n => n !== "Mặc định" && n !== "Default");
-    const stats = await anki.call("getDeckStats", { decks: names });
-    const byName = {}; Object.values(stats).forEach(s => { byName[s.name] = s; });
-    const reviewed = await anki.call("getNumCardsReviewedToday");
     const open = store.get("tk-open-decks", {});
-    const rows = names.filter(n => { const p = n.split("::"); for (let i = 1; i < p.length; i++) if (!open[p.slice(0, i).join("::")]) return false; return true; });
+    const visible = names => names.filter(n => { const p = n.split("::"); for (let i = 1; i < p.length; i++) if (!open[p.slice(0, i).join("::")]) return false; return true; });
+    // Số thẻ lần trước hiện ngay (nếu có) trong lúc hỏi Anki số mới.
+    const tok = ++deckTok;
+    const cache = store.get("tk-deck-cache", null);
+    if (cache) drawDecks(cache.names, cache.byName, cache.reviewed, visible(cache.names), open, true);
+    else studyEl.innerHTML = `<div class="notice">Đang tải danh sách deck…</div>`;
+    const [allNames, reviewed] = await Promise.all([anki.call("deckNames"), anki.call("getNumCardsReviewedToday")]);
+    const names = allNames.filter(n => n !== "Mặc định" && n !== "Default");
+    const rows = visible(names);
+    // Chỉ hỏi số thẻ của các deck đang hiện: hỏi cả 300+ deck một lúc mất vài giây.
+    const stats = await anki.call("getDeckStats", { decks: rows });
+    const byName = { ...(cache ? cache.byName : {}) };
+    Object.values(stats).forEach(s => { byName[s.name] = s; });
+    store.set("tk-deck-cache", { names, byName, reviewed });
+    // Trong lúc chờ mà người học đã mở deck hoặc bấm tải lại thì không vẽ đè.
+    if (tok === deckTok && !session) drawDecks(names, byName, reviewed, rows, open, false);
+  }
+  let deckTok = 0;
+  function drawDecks(names, byName, reviewed, rows, open, stale) {
     const num = (v, cls) => `<span class="n ${v ? cls : "zero"}">${v}</span>`;
     studyEl.innerHTML = `<div class="study-head"><div><h1>Học với Anki</h1><span class="muted">Hôm nay đã ôn ${reviewed} thẻ. Lịch ôn và FSRS do chính Anki tính.</span></div>
       <div class="row-actions"><button class="btn" id="syncBtn" type="button">Đồng bộ AnkiWeb</button><button class="btn" id="reload" type="button">Tải lại</button></div></div>
-      <div class="decks"><div class="deck head"><span>Deck</span><span class="n">Mới</span><span class="n">Học</span><span class="n">Đến hạn</span></div>
+      <div class="decks${stale ? " stale" : ""}"><div class="deck head"><span>Deck</span><span class="n">Mới</span><span class="n">Học</span><span class="n">Đến hạn</span></div>
       ${rows.map(n => {
         const p = n.split("::"), s = byName[n] || { new_count: 0, learn_count: 0, review_count: 0 };
         const hasKids = names.some(m => m.startsWith(n + "::"));

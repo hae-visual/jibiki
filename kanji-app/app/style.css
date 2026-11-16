@@ -188,6 +188,7 @@ main { padding-block: 20px 64px; }
 .deck .n.lrn { color: var(--bad); }
 .deck .n.rev { color: var(--ok); }
 .deck .n.zero { color: var(--line); }
+.decks.stale .deck:not(.head) .n { opacity: .5; }  /* số thẻ lần trước, đang chờ Anki trả số mới */
 .reviewer { display: grid; gap: 12px; }
 .rv-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
 .counts { font-variant-numeric: tabular-nums; font-weight: 600; display: flex; gap: 10px; }
