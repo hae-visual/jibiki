@@ -26,10 +26,14 @@
   const anki = {
     ok: false,
     async call(action, params = {}) {
-      const r = await fetch("http://127.0.0.1:8765", { method: "POST", body: JSON.stringify({ action, version: 6, params }) });
-      const j = await r.json();
-      if (j.error) throw new Error(j.error);
-      return j.result;
+      // Anki đang làm việc khác (lưu, vẽ lại danh sách deck…) thì từ chối lệnh, chưa làm gì: chờ một chút rồi gửi lại.
+      for (let i = 0; ; i++) {
+        const r = await fetch("http://127.0.0.1:8765", { method: "POST", body: JSON.stringify({ action, version: 6, params }) });
+        const j = await r.json();
+        if (j.error && /operation is active/i.test(j.error) && i < 10) { await new Promise(ok => setTimeout(ok, 200)); continue; }
+        if (j.error) throw new Error(j.error);
+        return j.result;
+      }
     },
     async ping() {
       try { await this.call("version"); this.ok = true; } catch (e) { this.ok = false; }
