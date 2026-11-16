@@ -426,6 +426,17 @@
   // Tích một ô contribution trên GitHub: server ghi một dòng vào repo nhật ký học rồi commit.
   const dongGop = (text, once) => fetch("/api/dong-gop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, once }) })
     .then(r => r.ok ? r.json() : null).catch(() => null);
+  // Thẻ Anki đang hiện. Sau khi chấm, Anki chuyển thẻ trong nền: hỏi lại vài lần (cách 50ms) khi vẫn thấy thẻ cũ
+  // hoặc chưa thấy thẻ nào, thay cho việc chờ cố định. Cùng một thẻ quay lại thật (deck chỉ còn một thẻ) thì vẫn nhận sau vài lần.
+  async function currentCard(prevId) {
+    let c = null;
+    for (let i = 0; i < 6; i++) {
+      try { c = await anki.call("guiCurrentCard"); } catch (e) { c = null; }
+      if (c && c.cardId !== prevId) return c;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return c;
+  }
   async function deckCounts(deck) {
     const st = await anki.call("getDeckStats", { decks: [deck] });
     return Object.values(st)[0] || { new_count: 0, learn_count: 0, review_count: 0 };
@@ -443,7 +454,6 @@
       studyEl.innerHTML = `<div class="notice">Không mở được deck trong Anki: ${esc(e.message)}</div>`;
       return;
     }
-    await new Promise(r => setTimeout(r, 250));
     nextCard();
   }
   async function endSession() {
@@ -731,12 +741,13 @@
     return `<div class="wr-res no"><b class="wr-head">Chưa đúng</b><span class="wr-tip">${tip}</span></div>`;
   }
 
-  async function nextCard() {
+  // same: vẫn là thẻ đang hiện (đổi chế độ học), không cần chờ Anki chuyển thẻ.
+  async function nextCard(same) {
     const s = session;
     if (!s) return;
-    let c = null;
-    try { c = await anki.call("guiCurrentCard"); } catch (e) { c = null; }
-    const counts = await deckCounts(s.deck);
+    // Hỏi thẻ hiện tại và số thẻ còn lại cùng lúc.
+    const [c, counts] = await Promise.all([currentCard(s.cur && !same ? s.cur.cardId : null), deckCounts(s.deck)]);
+    if (session !== s) return;
     if (!c) {
       studyEl.innerHTML = `<div class="notice"><b>Xong phần hôm nay của “${esc(s.title)}”.</b> Đã chấm ${s.done} thẻ trong phiên này.${counts.learn_count ? ` Còn ${counts.learn_count} thẻ đang học sẽ đến hạn lại sau vài phút.` : ""}
         <div class="row-actions" style="margin-top:10px">${s.back ? `<a class="btn" href="#${esc(s.back)}">← Quay lại thẻ kanji</a>` : ""}<button class="btn" id="toDecks" type="button">Danh sách deck</button>${counts.learn_count ? '<button class="btn primary" id="again" type="button">Kiểm tra lại</button>' : ""}</div></div>`;
@@ -813,7 +824,7 @@
     $("#modeS").addEventListener("click", () => {
       hocNguoc = !hocNguoc;
       store.set("tk-hoc-nguoc", hocNguoc);
-      if (!s.shown) nextCard(); else { $("#modeS").textContent = "Học ngược: " + (hocNguoc ? "Bật" : "Tắt"); $("#modeS").setAttribute("aria-pressed", String(hocNguoc)); }
+      if (!s.shown) nextCard(true); else { $("#modeS").textContent = "Học ngược: " + (hocNguoc ? "Bật" : "Tắt"); $("#modeS").setAttribute("aria-pressed", String(hocNguoc)); }
     });
   }
   async function showAnswer() {
@@ -824,7 +835,8 @@
       $("#showAns").textContent = "Đang đọc chữ…";
       $("#wResult").innerHTML = await inkVerdict(s.kanji);
     }
-    try { await anki.call("guiShowAnswer"); } catch (e) {}
+    // Mặt sau đã có sẵn từ lúc lấy thẻ: hiện ngay, báo Anki lật thẻ trong nền (chấm điểm sẽ chờ việc này xong).
+    s.showP = anki.call("guiShowAnswer").catch(() => {});
     s.busy = false;
     s.shown = true;
     const c = s.cur, f = $("#cf");
@@ -847,10 +859,10 @@
     s.busy = true;
     stopAudio();
     try {
+      await s.showP;
       if (!(await anki.call("guiAnswerCard", { ease }))) throw new Error("Anki không nhận câu trả lời. Hãy kiểm tra cửa sổ Anki đang ở màn hình ôn tập.");
       s.done++;
       s.busy = false;
-      await new Promise(r => setTimeout(r, 150));
       nextCard();
     } catch (e) {
       s.busy = false;
