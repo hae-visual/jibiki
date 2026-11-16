@@ -752,8 +752,25 @@
     const s = session;
     if (!s) return;
     // Hỏi thẻ hiện tại và số thẻ còn lại cùng lúc.
-    const [c, counts] = await Promise.all([currentCard(s.cur && !same ? s.cur.cardId : null), deckCounts(s.deck)]);
+    let c, counts;
+    try { [c, counts] = await Promise.all([currentCard(s.cur && !same ? s.cur.cardId : null), deckCounts(s.deck)]); }
+    catch (e) {
+      // Mất kết nối giữa chừng (Anki bị tắt): lần chấm trước đó, nếu có, đã lưu trong Anki.
+      if (session === s) {
+        studyEl.innerHTML = `<div class="notice"><b>Mất kết nối với Anki.</b> Các thẻ đã chấm vẫn được lưu trong Anki. Mở lại Anki rồi bấm <button class="btn small" id="retry" type="button">Thử lại</button>.</div>`;
+        $("#retry").addEventListener("click", () => startSession({ title: s.title, deck: s.deck, back: s.back }));
+      }
+      return;
+    }
     if (session !== s) return;
+    if (!c && (counts.new_count || counts.review_count)) {
+      // Anki không còn ở màn hình ôn tập (ví dụ đã bấm sang chỗ khác trong cửa sổ Anki) dù deck vẫn còn thẻ.
+      studyEl.innerHTML = `<div class="notice"><b>Anki đã rời màn hình ôn tập</b> nhưng “${esc(s.title)}” vẫn còn thẻ. Đã chấm ${s.done} thẻ trong phiên này.
+        <div class="row-actions" style="margin-top:10px"><button class="btn primary" id="tiepTuc" type="button">Học tiếp</button><button class="btn" id="toDecks" type="button">Danh sách deck</button></div></div>`;
+      $("#tiepTuc").addEventListener("click", () => startSession({ title: s.title, deck: s.deck, back: s.back }));
+      $("#toDecks").addEventListener("click", endSession);
+      return;
+    }
     if (!c) {
       studyEl.innerHTML = `<div class="notice"><b>Xong phần hôm nay của “${esc(s.title)}”.</b> Đã chấm ${s.done} thẻ trong phiên này.${counts.learn_count ? ` Còn ${counts.learn_count} thẻ đang học sẽ đến hạn lại sau vài phút.` : ""}
         <div class="row-actions" style="margin-top:10px">${s.back ? `<a class="btn" href="#${esc(s.back)}">← Quay lại thẻ kanji</a>` : ""}<button class="btn" id="toDecks" type="button">Danh sách deck</button>${counts.learn_count ? '<button class="btn primary" id="again" type="button">Kiểm tra lại</button>' : ""}</div></div>`;
