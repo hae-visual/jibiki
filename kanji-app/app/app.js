@@ -1179,6 +1179,19 @@
         if (cur === day) { dirty = true; $("#noteState").textContent = CHO; timer = setTimeout(save, 5000); }
       }
     }
+    // Gõ "+ " hoặc "- " ở đầu dòng thì dấu đó thành "•" (chấm đậm) cho dễ nhìn. Đổi bằng execCommand để Ctrl+Z vẫn lấy lại dấu cũ.
+    $("#noteText").addEventListener("input", e => {
+      if (!/^insert(Text|CompositionText)$/.test(e.inputType || "")) return;
+      const box = e.target, end = box.selectionStart;
+      if (end !== box.selectionEnd) return;
+      const lineStart = box.value.lastIndexOf("\n", end - 1) + 1;
+      const m = box.value.slice(lineStart, end).match(/^([ \t]*)[+-] $/);
+      if (!m) return;
+      const at = lineStart + m[1].length;
+      box.setSelectionRange(at, at + 1);
+      if (!document.execCommand("insertText", false, "•")) box.setRangeText("•", at, at + 1, "end");
+      box.setSelectionRange(end, end);
+    });
     $("#noteText").addEventListener("input", () => { dirty = true; nhap.set(cur, $("#noteText").value, goc); $("#noteState").textContent = "Đang gõ…"; clearTimeout(timer); timer = setTimeout(save, 700); });
     $("#noteText").addEventListener("blur", save);
     $("#noteText").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); } });
