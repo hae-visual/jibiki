@@ -389,17 +389,18 @@
     const visible = names => names.filter(n => { const p = n.split("::"); for (let i = 1; i < p.length; i++) if (!open[p.slice(0, i).join("::")]) return false; return true; });
     // Số thẻ lần trước hiện ngay (nếu có) trong lúc hỏi Anki số mới.
     const tok = ++deckTok;
-    const cache = store.get("tk-deck-cache", null);
+    const cache = store.get("tk-deck-cache2", null);
     if (cache) drawDecks(cache.names, cache.byName, cache.reviewed, visible(cache.names), open, true);
     else studyEl.innerHTML = `<div class="notice">Đang tải danh sách deck…</div>`;
-    const [allNames, reviewed] = await Promise.all([anki.call("deckNames"), anki.call("getNumCardsReviewedToday")]);
-    const names = allNames.filter(n => n !== "Mặc định" && n !== "Default");
+    const [ids, reviewed] = await Promise.all([anki.call("deckNamesAndIds"), anki.call("getNumCardsReviewedToday")]);
+    const names = Object.keys(ids).filter(n => n !== "Mặc định" && n !== "Default").sort((a, b) => a.localeCompare(b));
     const rows = visible(names);
     // Chỉ hỏi số thẻ của các deck đang hiện: hỏi cả 300+ deck một lúc mất vài giây.
     const stats = await anki.call("getDeckStats", { decks: rows });
+    // Anki trả số thẻ theo mã deck, kèm tên ngắn ("Bài 05") trùng giữa nhiều deck: ghép theo mã, không theo tên.
     const byName = { ...(cache ? cache.byName : {}) };
-    Object.values(stats).forEach(s => { byName[s.name] = s; });
-    store.set("tk-deck-cache", { names, byName, reviewed });
+    rows.forEach(n => { const s = stats[ids[n]]; if (s) byName[n] = s; });
+    store.set("tk-deck-cache2", { names, byName, reviewed });
     // Trong lúc chờ mà người học đã mở deck hoặc bấm tải lại thì không vẽ đè.
     if (tok === deckTok && !session) drawDecks(names, byName, reviewed, rows, open, false);
   }
