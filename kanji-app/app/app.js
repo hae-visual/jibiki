@@ -807,7 +807,7 @@
       <div class="write-area"><div class="canvas-box"><canvas id="wpad" aria-label="Bảng viết chữ"></canvas><div class="guide" aria-hidden="true"></div></div></div>`;
     studyEl.innerHTML = `<div class="reviewer"><div class="rv-top"><div><b>${esc(s.title)}</b> <span class="muted">· ${esc(c.deckName || "")} · đã chấm ${s.done}</span></div>
       <span class="counts"><span class="new">${counts.new_count}</span><span class="lrn">${counts.learn_count}</span><span class="rev">${counts.review_count}</span></span>
-      <span class="row-actions">${phatBtn}${modeBtn}${s.back ? `<a class="btn small" href="#${esc(s.back)}">← Thẻ kanji</a>` : ""}<button class="btn small" id="endS" type="button">Dừng</button></span></div>
+      <span class="row-actions">${phatBtn}${modeBtn}${s.back ? `<a class="btn small" href="#${esc(s.back)}">← Thẻ kanji</a>` : ""}<button class="btn small" id="undoS" type="button" title="Hoàn tác lần chấm thẻ trước (Ctrl+Z)"${s.done ? "" : " disabled"}>↶ Hoàn tác</button><button class="btn small" id="endS" type="button">Dừng</button></span></div>
       ${s.mode === "viet"
         // Viết kanji: bảng viết bên trái, mặt sau thẻ hiện bên phải sau khi kiểm tra (màn hình hẹp thì xếp dọc).
         ? `<div class="write-wrap" id="writeWrap"><div class="write-left">${writeUI}</div><iframe class="cardframe" id="cf" title="Thẻ Anki" hidden></iframe></div>`
@@ -838,6 +838,7 @@
     }
     $("#showAns").addEventListener("click", showAnswer);
     $("#endS").addEventListener("click", endSession);
+    $("#undoS").addEventListener("click", hoanTac);
     $("#phatS").addEventListener("click", () => {
       tuPhat = !tuPhat;
       store.set("tk-tu-phat", tuPhat);
