@@ -1,10 +1,10 @@
 """Redesign the back of the "Từ → Đọc/Nghĩa" card (note type "Kanji Look and Learn - Từ ghép (VN)").
 
-The old "Kanji: 月" line becomes the Sino-Vietnamese reading of every kanji in the word (今 KIM · 月 NGUYỆT), and the back is
-laid out as: reading + audio on one line, Sino-Vietnamese chips, meaning, example sentence. The readings come from your own
+The old "Kanji: 月" line becomes the Sino-Vietnamese reading of the whole word on one line (日本 → Nhật Bản), and the back is
+laid out as: reading + audio on one line, Sino-Vietnamese reading, meaning, example sentence. The readings come from your own
 "Kanji Look and Learn - Kanji (VN)" notes and are written into the template as a small table, so no field is added (adding a
-field would force a full one-way sync with AnkiWeb). In the app's reverse mode the chips hide the kanji so they don't give the
-answer away. Safe to rerun: the part between the markers is replaced.
+field would force a full one-way sync with AnkiWeb). The line shows no kanji, so it doesn't give the answer away in the app's
+reverse mode. Safe to rerun: the part between the markers is replaced.
 
 Usage: py tu_ghep_han_viet.py [--preview out.html] [--remove]
 The original template is saved to _build/tu-ghep-template-backup.json before the first change.
@@ -21,16 +21,9 @@ CSS_START, CSS_END = "/* jibiki-han-viet */", "/* /jibiki-han-viet */"
 CSS = CSS_START + """
 .rd{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0 2px}
 .rd .kana{font-size:32px}
-.hvrow{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0 6px}
-.hvc{display:inline-flex;align-items:baseline;gap:8px;padding:4px 14px;border-radius:999px;background:#fdecea}
-.hvc .hvk{font-size:20px;color:#555}
-.hvc b,.hvrow>b{font-size:21px;color:#c62828;letter-spacing:.04em}
-.hvsep{color:#bbb}
-.rd+.hvrow+.mean,.hvrow+.mean{margin-top:4px}
+.hvline{font-size:22px;font-weight:bold;color:#c62828;letter-spacing:.03em;margin:8px 0 2px}
 .sent{border-top:1px dashed #d6d6d6;padding-top:12px;margin:14px auto 4px;max-width:90%}
-.nightMode .hvc,.night_mode .hvc{background:#3a2626}
-.nightMode .hvc .hvk,.night_mode .hvc .hvk{color:#bbb}
-.nightMode .hvc b,.night_mode .hvc b,.nightMode .hvrow>b,.night_mode .hvrow>b{color:#ef9a9a}
+.nightMode .hvline,.night_mode .hvline{color:#ef9a9a}
 .nightMode .sent,.night_mode .sent{border-top-color:#444}
 """ + CSS_END
 
@@ -56,7 +49,12 @@ def han_viet_table():
             hv.setdefault(k, h)
     used = {c for n in call("notesInfo", notes=call("findNotes", query=f'"note:{MODEL}"'))
             for c in plain(n["fields"]["Từ"]["value"])}
-    return {k: v for k, v in sorted(hv.items()) if k in used}
+    # One reading per kanji, the first one ("BẢN, BỔN" → "BẢN"); words that need another are listed in KHAC.
+    return {k: re.split(r"\s*[,/]\s*", v)[0] for k, v in sorted(hv.items()) if k in used}
+
+
+# Words whose kanji is read with its second Sino-Vietnamese reading.
+KHAC = {"音楽": "ÂM NHẠC"}
 
 
 def back_template(table):
@@ -64,25 +62,26 @@ def back_template(table):
     assert "{{" not in data and "}}" not in data
     script = """<script>
 (function () {
-  var all = document.querySelectorAll(".hvrow"), el = all[all.length - 1];
+  var all = document.querySelectorAll(".hvline"), el = all[all.length - 1];
   if (!el || el.getAttribute("data-on")) return;
   el.setAttribute("data-on", "1");
-  var M = __DATA__;
-  var w = (el.getAttribute("data-w") || "").replace(/\\s+/g, "");
-  var hide = !!document.querySelector(".tk-nguoc"), out = [], prev = "";
-  for (var i = 0; i < w.length; i++) {
+  var M = __DATA__, K = __KHAC__;
+  var w = (el.getAttribute("data-w") || "").replace(/\\s+/g, ""), out = [], prev = "";
+  if (K[w]) out = K[w].split(" ");
+  else for (var i = 0; i < w.length; i++) {
     var ch = w[i] === "々" ? prev : w[i];
     prev = ch;
-    if (!M[ch]) continue;
-    out.push(hide ? "<b>" + M[ch] + "</b>" : '<span class="hvc"><span class="hvk">' + w[i] + "</span><b>" + M[ch] + "</b></span>");
+    if (M[ch]) out.push(M[ch]);
   }
-  if (out.length) el.innerHTML = out.join('<span class="hvsep">·</span>');
+  // NHẬT BẢN → Nhật Bản
+  out = out.map(function (x) { x = x.toLowerCase(); return x.charAt(0).toUpperCase() + x.slice(1); });
+  if (out.length) el.textContent = out.join(" ");
   else el.style.display = "none";
 })();
-</script>""".replace("__DATA__", data)
+</script>""".replace("__DATA__", data).replace("__KHAC__", json.dumps(KHAC, ensure_ascii=False))
     return ('{{FrontSide}}<hr id=answer>'
             '<div class="rd"><span class="kana">{{Cách đọc}}</span>{{Âm thanh}}</div>'
-            '<div class="hvrow" data-w="{{text:Từ}}"></div>'
+            '<div class="hvline" data-w="{{text:Từ}}"></div>'
             '<div class="mean">{{Nghĩa}}</div>'
             '{{#Ví dụ}}<div class="sent">{{Ví dụ}}</div>{{/Ví dụ}}\n' + script)
 
