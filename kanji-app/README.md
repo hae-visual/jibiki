@@ -10,6 +10,15 @@ A local app for looking up kanji by handwriting, viewing cards in the style of K
 
 Lookup and the Minna tests work while Anki is closed. Studying cards, the review schedule and editing mnemonics need Anki to be open.
 
+## Grammar tests: grading handwritten answers
+
+Part 2 of each Minna grammar test is written on paper, photographed and uploaded. The server sends the photos and the questions to Claude (`cham_ngu_phap.py`, model Claude Opus 5.5), which reads each numbered answer, marks it right, nearly right or wrong, explains the mistake in Vietnamese and gives a corrected sentence. This needs:
+
+1. The Python SDK: `py -m pip install anthropic`.
+2. Your own API key from console.anthropic.com in the `ANTHROPIC_API_KEY` environment variable (for example `setx ANTHROPIC_API_KEY "sk-ant-..."`), then restart the server. Each grading is billed to your Anthropic account, roughly US$0.10 per test.
+
+Without a key, part 1 (putting sentences in order) still works and part 2 shows how to set the key up.
+
 ## Text scan and notes
 
 - **Text scan** (button in the top bar, "Quét chữ"): select Japanese text anywhere (lookup cards, Minna test pages, Anki cards) to see the meaning and Sino-Vietnamese reading of each kanji, the meaning of the word (if it is in Minna/KLL), and katakana converted to hiragana. Selecting a whole sentence (5 characters or more) adds a machine translation from Google Translate through the server's `/api/dich`. Each kanji has a link that opens its card in a new tab. Characters outside the card set use `app/data/tu-dien.js` (built by `tools/build_tudien.py` from KANJIDIC2 and Unihan).
