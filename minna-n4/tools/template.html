@@ -350,7 +350,7 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 660px; }
         <div><b>${words.toLocaleString("vi")}</b><span>từ vựng</span></div>
         <div><b>${sum(b => (D.kanji[b] || []).length)}</b><span>kanji N4</span></div>
         <div><b>${sum(b => D.grammar[b].length)}</b><span>mẫu ngữ pháp</span></div>
-        <div><b>${sum(b => 5 * D.grammar[b].length)}</b><span>câu ngữ pháp</span></div>
+        <div><b>${Object.values(D.dich).reduce((s, v) => s + v.length, 0).toLocaleString("vi")}</b><span>câu ngữ pháp</span></div>
       </div>
       <h2>Bài học và đề kiểm tra</h2><div class="lessons">`;
     L.forEach(b => {

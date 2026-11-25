@@ -355,7 +355,7 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 640px; }
         <div><b>25</b><span>bài học</span></div>
         <div><b>${vocabCount.toLocaleString("vi")}</b><span>từ vựng</span></div>
         <div><b>${grammarCount}</b><span>mẫu ngữ pháp</span></div>
-        <div><b>5</b><span>đề · ${5 * grammarCount} câu ngữ pháp</span></div>
+        <div><b>5</b><span>đề · ${Object.values(D.dich).reduce((s, v) => s + v.length, 0).toLocaleString("vi")} câu ngữ pháp</span></div>
       </div>
       <h2>Đề kiểm tra</h2><div class="test-cards">`;
     D.tests.forEach((t, i) => {
@@ -363,7 +363,7 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 640px; }
       const saved = store.get("minna-n5-de-" + t.id);
       const st = saved && saved.done && !saved.ans ? ` · lần trước: ${saved.score} điểm` : "";
       h += `<a class="test-card" href="#de-${t.id}"><b>${t.title} · Bài ${t.lessons[0]}–${t.lessons[1]}</b>
-        <small>${n / 2} mẫu ngữ pháp · ${n} câu mỗi lần làm${st}</small></a>`;
+        <small>${n / 2} mẫu ngữ pháp · ${n + 12} câu mỗi lần làm (chia thể, sắp xếp, dịch)${st}</small></a>`;
     });
     h += `</div><h2>Bài học</h2>`;
     D.tests.forEach(t => {
