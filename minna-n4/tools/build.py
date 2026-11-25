@@ -43,11 +43,18 @@ for b in range(26, 51):
     tests[b] = t
 
 # N5–N4 grammar comparison: one shared file for both pages.
+import glob
+# Câu dịch soạn mới cho đề ngữ pháp: {mã mẫu: [[tiếng Việt, tiếng Nhật, gợi ý từ], ...]}.
+dich = {}
+for _f in sorted(glob.glob(os.path.join(DATA, "dich-*.json"))):
+    dich.update(json.load(open(_f, encoding="utf-8")))
 so_sanh = json.load(open(os.path.join(HERE, "..", "data", "so-sanh-n5-n4.json"), encoding="utf-8"))
-payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "kanji": check.kanji, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check)},
+payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "kanji": check.kanji, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check), "dich": dich},
                      ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 tpl = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
 out = tpl.replace("/*__DATA__*/{}", payload)
+# Đề ngữ pháp dùng chung cho N5 và N4.
+out = out.replace("/*__DE_NP__*/", open(os.path.join(HERE, "..", "..", "minna-n4", "tools", "de-ngu-phap.js"), encoding="utf-8").read())
 os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
 dst = os.path.join(ROOT, "dist", "minna-n4.html")
 open(dst, "w", encoding="utf-8").write(out)
