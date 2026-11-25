@@ -169,6 +169,8 @@
       const dich = TONG + 2 * moi.filter(t => yeu.includes(t)).length;
       for (let i = 0; chon.length < dich; i++) chon.push(thu[i % thu.length]);
     }
+    const thuTu = [...new Set(chon)];
+    chon.sort((x, y) => thuTu.indexOf(x) - thuTu.indexOf(y));  // các câu cùng một thể đứng liền nhau
     const trong = ds.filter(v => L.includes(v[3])), truoc = ds.filter(v => v[3] < lo);
     const xt = npShuffle(trong.length, cfg.key + "v" + lan).map(i => trong[i]), xs = npShuffle(truoc.length, cfg.key + "w" + lan).map(i => truoc[i]);
     const pool = [...xt, ...xs], dung = new Map(), cap = new Set(), out = [];
