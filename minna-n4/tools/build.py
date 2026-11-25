@@ -49,13 +49,21 @@ dich = {}
 for _f in sorted(glob.glob(os.path.join(DATA, "dich-*.json"))):
     for _k, _v in json.load(open(_f, encoding="utf-8")).items():
         dich.setdefault(_k, []).extend(_v)  # dich-*.json và dich-them-*.json cộng dồn câu cho cùng một mẫu
+# Động từ cho phần "Chia thể" của đề ngữ pháp: động từ N5 (đã học) và N4.
+from dong_tu import dong_tu
+_n5 = os.path.join(ROOT, "..", "minna-n5", "data", "vocab.json")
+dong_tu_ds, _co = [], set()
+for _v in (dong_tu(json.load(open(_n5, encoding="utf-8"))) if os.path.exists(_n5) else []) + dong_tu(check.vocab):
+    if (_v[0], _v[1]) not in _co:
+        _co.add((_v[0], _v[1])); dong_tu_ds.append(_v)
 so_sanh = json.load(open(os.path.join(HERE, "..", "data", "so-sanh-n5-n4.json"), encoding="utf-8"))
-payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "kanji": check.kanji, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check), "dich": dich},
+payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "kanji": check.kanji, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check), "dich": dich, "dongTu": dong_tu_ds},
                      ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 tpl = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
 out = tpl.replace("/*__DATA__*/{}", payload)
 # Đề ngữ pháp dùng chung cho N5 và N4.
-out = out.replace("/*__DE_NP__*/", open(os.path.join(HERE, "..", "..", "minna-n4", "tools", "de-ngu-phap.js"), encoding="utf-8").read())
+_np = os.path.join(HERE, "..", "..", "minna-n4", "tools")
+out = out.replace("/*__DE_NP__*/", "".join(open(os.path.join(_np, f), encoding="utf-8").read() for f in ("chia-the.js", "de-ngu-phap.js")))
 os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
 dst = os.path.join(ROOT, "dist", "minna-n4.html")
 open(dst, "w", encoding="utf-8").write(out)

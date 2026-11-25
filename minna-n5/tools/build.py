@@ -49,13 +49,18 @@ dich = {}
 for _f in sorted(glob.glob(os.path.join(DATA, "dich-*.json"))):
     for _k, _v in json.load(open(_f, encoding="utf-8")).items():
         dich.setdefault(_k, []).extend(_v)  # dich-*.json và dich-them-*.json cộng dồn câu cho cùng một mẫu
+# Động từ cho phần "Chia thể" của đề ngữ pháp.
+sys.path.insert(0, os.path.join(HERE, "..", "..", "minna-n4", "tools"))
+from dong_tu import dong_tu
+dong_tu_ds = dong_tu(check.vocab)
 so_sanh = json.load(open(os.path.join(HERE, "..", "..", "minna-n4", "data", "so-sanh-n5-n4.json"), encoding="utf-8"))
-payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check), "dich": dich},
+payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check), "dich": dich, "dongTu": dong_tu_ds},
                      ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 tpl = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
 out = tpl.replace("/*__DATA__*/{}", payload)
 # Đề ngữ pháp dùng chung cho N5 và N4.
-out = out.replace("/*__DE_NP__*/", open(os.path.join(HERE, "..", "..", "minna-n4", "tools", "de-ngu-phap.js"), encoding="utf-8").read())
+_np = os.path.join(HERE, "..", "..", "minna-n4", "tools")
+out = out.replace("/*__DE_NP__*/", "".join(open(os.path.join(_np, f), encoding="utf-8").read() for f in ("chia-the.js", "de-ngu-phap.js")))
 os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
 dst = os.path.join(ROOT, "dist", "minna-n5.html")
 open(dst, "w", encoding="utf-8").write(out)
