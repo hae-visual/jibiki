@@ -12,7 +12,7 @@ Lookup and the Minna tests work while Anki is closed. Studying cards, the review
 
 ## Grammar tests: grading handwritten answers
 
-Part 2 of each Minna grammar test is written on paper, photographed and uploaded. The server sends the photos and the questions to Claude (`cham_ngu_phap.py`, model Claude Opus 5.5), which reads each numbered answer, marks it right, nearly right or wrong, explains the mistake in Vietnamese and gives a corrected sentence. This needs:
+The translation part of each Minna grammar test is written on paper, photographed and uploaded. The server sends the photos and the questions to Claude (`cham_ngu_phap.py`, model Claude Opus 5.5), which reads each numbered answer, marks it right, nearly right or wrong, explains the mistake in Vietnamese and gives a corrected sentence. This needs:
 
 1. The Python SDK: `py -m pip install anthropic`.
 2. Your own API key from console.anthropic.com in the `ANTHROPIC_API_KEY` environment variable (for example `setx ANTHROPIC_API_KEY "sk-ant-..."`), then restart the server. Each grading is billed to your Anthropic account, roughly US$0.10 per test.
