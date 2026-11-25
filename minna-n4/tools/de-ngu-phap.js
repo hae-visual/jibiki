@@ -1,7 +1,8 @@
   /* ---------- Đề ngữ pháp (dùng chung cho trang N5 và N4) ----------
-     Mỗi mẫu ngữ pháp có 5 câu soạn mới (data/dich-*.json, dich-them-*.json: [tiếng Việt, tiếng Nhật, gợi ý từ]).
-     Phần 1 · Sắp xếp câu: mỗi mẫu một câu, bấm các mảnh theo thứ tự, máy chấm ngay.
-     Phần 2 · Dịch Việt → Nhật: mỗi mẫu cfg.soDich câu, cộng thêm một câu cho mẫu đã sai ở lần làm trước; viết ra giấy,
+     Mỗi mẫu ngữ pháp có các câu soạn mới (data/dich-*.json, dich-them-*.json: [tiếng Việt, tiếng Nhật, gợi ý từ]).
+     Chia thể (trắc nghiệm, chấm ngay): thể động từ mới của các bài trong đề, thêm thể đã học cho đủ câu (chia-the.js).
+     Sắp xếp câu: mỗi mẫu một câu, bấm các mảnh theo thứ tự, máy chấm ngay.
+     Dịch Việt → Nhật: mỗi mẫu cfg.soDich câu, cộng thêm một câu cho mẫu đã sai ở lần làm trước; viết ra giấy,
      chụp ảnh tải lên, server của app gửi ảnh cho Claude đọc và chấm từng câu.
      Mỗi lần "Làm lại" thì dịch sang những câu tiếp theo, nên lần sau gặp câu khác. */
   function npCss() {
@@ -34,6 +35,14 @@
 .np-kq{margin:6px 0 0 2em;font-size:.95rem;line-height:1.55}
 .np-kq .doc{font-family:var(--font-jp,inherit)}
 .np-status{color:var(--muted,#777)}
+.np-c{border-top:1px solid var(--line,#ddd);padding:10px 0}
+.np-c .stem{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.np-c .the{color:var(--ai,#2c4a87);font-weight:600}
+.np-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin:8px 0 0 32px}
+.np-opt{font:inherit;font-size:1.1rem;padding:6px 10px;border-radius:8px;border:1px solid var(--line,#ccc);background:var(--sheet,#fff);color:var(--ink,#222);cursor:pointer;text-align:left}
+.np-opt:hover:not([disabled]){border-color:var(--ai,#2c4a87)}
+.np-opt[disabled]{cursor:default}
+.np-opt.dung{border-color:#2e7d32;background:rgba(46,125,50,.1)}.np-opt.sai{border-color:#c62828;background:rgba(198,40,40,.1)}
 @media print{body *{visibility:hidden!important}.np-print,.np-print *{visibility:visible!important}
 .np-print{position:absolute;left:0;top:0;width:100%}.np-tools,.np-up,.np-thumbs,.np-kq,.np-status{display:none!important}
 .np-list li{padding:14px 0 34px;break-inside:avoid}}`;
@@ -72,12 +81,18 @@
     npCss();
     let saved = store.get(cfg.key) || {};
     if (saved.ans) saved = {};  // bản ghi của đề trắc nghiệm cũ
-    saved.lan = saved.lan || 0; saved.xep = saved.xep || {};
+    saved.lan = saved.lan || 0; saved.xep = saved.xep || {}; saved.chia = saved.chia || {};
+    // Giữ danh sách mẫu / thể sai của lần trước ngay từ đầu lần làm, để tải lại trang vẫn ra đúng bộ câu.
+    if (!saved.yeu) saved.yeu = store.get(cfg.key + "-yeu") || [];
+    if (!saved.yeuChia) saved.yeuChia = store.get(cfg.key + "-yeuchia") || [];
     const save = () => store.set(cfg.key, saved);
+    save();
     const mau = cfg.lessons.flatMap(l => (D.grammar[l] || []).map(g => Object.assign({ bai: l }, g))).filter(g => (D.dich[g.id] || []).length);
     const soDich = cfg.soDich || 1;
     // Mẫu sai ở lần làm trước: phần 2 hỏi thêm một câu cho mẫu đó.
-    const yeuTruoc = new Set(store.get(cfg.key + "-yeu") || []);
+    const yeuTruoc = new Set(saved.yeu);
+    const dsChia = typeof ctDe === "function" ? ctDe(cfg, saved.lan, saved.yeuChia) : [];
+    const nc = dsChia.length, P = nc ? { chia: 1, xep: 2, dich: 3 } : { xep: 1, dich: 2 };
     // Mỗi lần làm dịch sang nhóm câu tiếp theo (bước = số câu dùng mỗi lần; không để bước chia hết cho số câu của mẫu).
     const cau = (g, k) => {
       const v = D.dich[g.id], buoc = (soDich + 1) % v.length || 1, x = v[(saved.lan * buoc + k) % v.length];
@@ -89,29 +104,62 @@
     let anh = [];  // ảnh bài làm (chỉ giữ trong trang, không lưu)
 
     let h = cfg.head + `<div class="test-head"><div><p class="eyebrow">${esc(cfg.eyebrow)}</p><h1>${esc(cfg.title)}</h1></div>
-      <div class="badges"><span class="badge">${mau.length} mẫu ngữ pháp</span><span class="badge">${mau.length + dsDich.length} câu</span><span class="badge">Lần làm ${saved.lan + 1}</span></div></div>
-      <div class="np-intro">Đề chỉ kiểm tra <b>ngữ pháp</b>: mỗi mẫu có một câu sắp xếp và ${soDich} câu dịch${yeuTruoc.size ? `, mẫu sai ở lần trước (${yeuTruoc.size} mẫu) được hỏi thêm một câu` : ""}. Từ vựng đã cho sẵn trong gợi ý, bạn chỉ cần dùng đúng mẫu.
-      <br><b>Phần 1</b> làm ngay trên trang, máy chấm. <b>Phần 2</b> viết câu tiếng Nhật ra giấy (ghi số câu), chụp ảnh rồi tải lên để Claude đọc và chấm.
+      <div class="badges"><span class="badge">${mau.length} mẫu ngữ pháp</span><span class="badge">${nc + mau.length + dsDich.length} câu</span><span class="badge">Lần làm ${saved.lan + 1}</span></div></div>
+      <div class="np-intro">Đề chỉ kiểm tra <b>ngữ pháp</b>: ${nc ? `${nc} câu chia thể động từ, ` : ""}mỗi mẫu có một câu sắp xếp và ${soDich} câu dịch${yeuTruoc.size ? `, mẫu sai ở lần trước (${yeuTruoc.size} mẫu) được hỏi thêm một câu` : ""}. Từ vựng đã cho sẵn trong gợi ý, bạn chỉ cần dùng đúng mẫu.
+      <br>${nc ? "<b>Phần 1–2</b>" : "<b>Phần 1</b>"} làm ngay trên trang, máy chấm. <b>Phần ${P.dich}</b> viết câu tiếng Nhật ra giấy (ghi số câu), chụp ảnh rồi tải lên để Claude đọc và chấm.
       <br>Bấm <b>Làm lại</b> để làm lần mới với câu khác.</div>
-      <div id="res"></div>
-      <section class="sec"><h3>Phần 1 · Sắp xếp thành câu đúng</h3><p class="instr">Bấm các mảnh theo đúng thứ tự để thành câu có nghĩa như câu tiếng Việt. Bấm vào mảnh đã chọn để bỏ ra.</p>`;
+      <div id="res"></div>`;
+    if (nc) {
+      h += `<section class="sec"><h3>Phần 1 · Chia thể động từ</h3><p class="instr">Chọn dạng đúng của động từ. Chọn xong máy chấm ngay và cho biết cách chia.</p>`;
+      dsChia.forEach((q, i) => {
+        const [k, r, nghia] = q.v;
+        h += `<div class="np-c" data-i="${i}"><div class="stem"><span class="num">${i + 1}</span><span class="text"><span class="jp">${esc(k)}</span>${k !== r ? `（${esc(r)}）` : ""} · ${esc(nghia)}</span><span class="the">→ ${esc(CT_THE[q.the][0])}</span></div>
+          <div class="np-opts">${q.opts.map((o, j) => `<button class="np-opt jp" type="button" data-j="${j}">${esc(o)}</button>`).join("")}</div><div class="np-fb"></div></div>`;
+      });
+      h += `</section>`;
+    }
+    h += `<section class="sec"><h3>Phần ${P.xep} · Sắp xếp thành câu đúng</h3><p class="instr">Bấm các mảnh theo đúng thứ tự để thành câu có nghĩa như câu tiếng Việt. Bấm vào mảnh đã chọn để bỏ ra.</p>`;
     mau.forEach((g, i) => {
       const c = cau(g, 0);
       h += `<div class="np-x" data-g="${g.id}"><div class="stem"><span class="num">${i + 1}</span><span class="text">${esc(c.vi)}</span></div>
         <div class="np-pat">Mẫu ${esc(g.id)}: ${esc(g.p)}</div><div class="np-ans"></div><div class="np-pool"></div><div class="np-fb"></div></div>`;
     });
-    h += `<div class="np-tools"><button class="btn primary" id="npXepNop" type="button">Chấm phần 1</button></div></section>
-      <section class="sec np-dich"><h3>Phần 2 · Dịch sang tiếng Nhật (viết ra giấy)</h3>
+    h += `<div class="np-tools"><button class="btn primary" id="npXepNop" type="button">Chấm phần ${P.xep}</button></div></section>
+      <section class="sec np-dich"><h3>Phần ${P.dich} · Dịch sang tiếng Nhật (viết ra giấy)</h3>
       <p class="instr">Viết câu tiếng Nhật cho từng câu, ghi rõ số câu. Viết kanji hay hiragana đều được. Xong thì chụp ảnh (chụp thẳng, đủ sáng) và tải lên.</p>
       <div class="np-tools"><label class="toggle"><input type="checkbox" id="npMau"> Hiện tên mẫu cần dùng</label><button class="btn" id="npIn" type="button">🖨 In phiếu câu hỏi</button></div>
       <div class="np-print"><ol class="np-list">${dsDich.map(({ g, c, them }, i) => `<li data-g="${g.id}"><span class="so">${i + 1}.</span>${esc(c.vi)}
         ${c.gy ? `<br><small>Gợi ý từ: ${esc(c.gy)}</small>` : ""} <span class="mau">· mẫu ${esc(g.id)}: ${esc(g.p)}</span>${them ? ` <small>(ôn lại mẫu sai lần trước)</small>` : ""}<div class="np-kq"></div></li>`).join("")}</ol></div>
       <div class="np-up"><label class="btn" for="npFile">📷 Chọn ảnh bài làm</label><input type="file" id="npFile" accept="image/*" multiple hidden>
-        <button class="btn primary" id="npCham" type="button" disabled>Chấm phần 2 bằng Claude</button><span class="np-status" id="npSt"></span></div>
+        <button class="btn primary" id="npCham" type="button" disabled>Chấm phần ${P.dich} bằng Claude</button><span class="np-status" id="npSt"></span></div>
       <div class="np-thumbs" id="npThumbs"></div></section>` + cfg.pager;
     app.innerHTML = h;
 
-    /* ----- Phần 1: sắp xếp ----- */
+    /* ----- Chia thể ----- */
+    const chiaBox = [...app.querySelectorAll(".np-c")];
+    function veChia(box) {
+      const i = +box.dataset.i, q = dsChia[i], chon = saved.chia[i];
+      if (chon === undefined) return;
+      box.querySelectorAll(".np-opt").forEach((b, j) => { b.disabled = true; b.classList.toggle("dung", j === q.a); b.classList.toggle("sai", j === chon && j !== q.a); });
+      const [kana, kanji] = ctChia(q.v, q.the);
+      box.querySelector(".np-fb").innerHTML = (chon === q.a ? `<span class="ok">Đúng.</span> ` : `<span class="no">Sai.</span> Đáp án: `) +
+        `<span class="jp">${esc(kanji)}</span>${kanji !== kana ? `（${esc(kana)}）` : ""} · ${esc(ctGoiY(q.v, q.the))}`;
+    }
+    const chiaXong = () => nc > 0 && dsChia.every((q, i) => saved.chia[i] !== undefined);
+    chiaBox.forEach(veChia);
+    app.onclick = e => {
+      const o = e.target.closest(".np-opt");
+      if (o) {
+        const box = o.closest(".np-c"), i = +box.dataset.i;
+        if (saved.chia[i] !== undefined) return;
+        saved.chia[i] = +o.dataset.j; save(); veChia(box);
+        if (chiaXong()) ketQua();
+        return;
+      }
+      xepClick(e);
+    };
+
+    /* ----- Sắp xếp ----- */
     const boxes = [...app.querySelectorAll(".np-x")];
     function veXep(box) {
       const g = mau.find(x => x.id === box.dataset.g), parts = manh(cau(g, 0).ja), chon = saved.xep[g.id] || [];
@@ -137,17 +185,17 @@
       return dung;
     }
     boxes.forEach(veXep);
-    app.onclick = e => {
+    function xepClick(e) {
       const t = e.target.closest(".np-tile"); if (!t || saved.xepDone) return;
       const box = t.closest(".np-x"), id = box.dataset.g, chon = saved.xep[id] = saved.xep[id] || [];
       if (t.dataset.k !== undefined) chon.push(+t.dataset.k); else chon.splice(+t.dataset.bo, 1);
       save(); veXep(box);
-    };
+    }
     document.getElementById("npXepNop").addEventListener("click", () => {
       saved.xepDone = true; chamXep(); save(); boxes.forEach(veXep); ketQua();
     });
 
-    /* ----- Phần 2: dịch, chấm ảnh ----- */
+    /* ----- Dịch, chấm ảnh ----- */
     document.getElementById("npMau").addEventListener("change", e => app.classList.toggle("np-showmau", e.target.checked));
     document.getElementById("npIn").addEventListener("click", () => window.print());
     const st = document.getElementById("npSt"), nut = document.getElementById("npCham");
@@ -192,6 +240,8 @@
     /* ----- Kết quả chung ----- */
     function ketQua() {
       const n = mau.length, nd = dsDich.length, x = saved.xepDone ? saved.xepDung || 0 : null;
+      const c = chiaXong() ? dsChia.filter((q, i) => saved.chia[i] === q.a).length : null;
+      const theYeu = [...new Set(dsChia.filter((q, i) => saved.chia[i] !== undefined && saved.chia[i] !== q.a).map(q => q.the))];
       let d = null, weak = new Set();
       if (saved.dich) {
         d = 0;
@@ -202,18 +252,20 @@
         });
       }
       if (saved.xepDone) mau.forEach(g => { if (!xepDung(g)) weak.add(g); });
-      const done = x !== null && d !== null;
-      let h = `<div class="result"><div><span class="eyebrow">Kết quả</span><div class="score">${done ? `${x + d}/${n + nd} · ${Math.round(100 * (x + d) / (n + nd))}%` : "Chưa xong"}</div></div>
-        <div class="parts"><span>Sắp xếp <b>${x === null ? "—" : `${x}/${n}`}</b></span><span>Dịch <b>${d === null ? "—" : `${d}/${nd}`}</b></span></div>`;
+      const done = x !== null && d !== null && (!nc || c !== null), tong = (c || 0) + x + d, het = nc + n + nd;
+      let h = `<div class="result"><div><span class="eyebrow">Kết quả</span><div class="score">${done ? `${tong}/${het} · ${Math.round(100 * tong / het)}%` : "Chưa xong"}</div></div>
+        <div class="parts">${nc ? `<span>Chia thể <b>${c === null ? "—" : `${c}/${nc}`}</b></span>` : ""}<span>Sắp xếp <b>${x === null ? "—" : `${x}/${n}`}</b></span><span>Dịch <b>${d === null ? "—" : `${d}/${nd}`}</b></span></div>`;
       if (saved.dich && saved.dich.nhan_xet) h += `<div><span class="eyebrow">Nhận xét</span><div>${esc(saved.dich.nhan_xet)}</div></div>`;
       if (weak.size) h += `<div><span class="eyebrow">Mẫu nên ôn lại</span><div class="weak">${[...weak].map(g => `<a href="#bai-${g.bai}" title="${esc(g.p)}">${esc(g.id)}</a>`).join("")}</div>${done ? `<small>Lần làm lại, mỗi mẫu này được hỏi thêm một câu.</small>` : ""}</div>`;
-      else if (done) h += `<div>Dùng đúng mọi mẫu ngữ pháp. Rất tốt!</div>`;
+      else if (done && !theYeu.length) h += `<div>Dùng đúng mọi mẫu ngữ pháp. Rất tốt!</div>`;
+      if (theYeu.length) h += `<div><span class="eyebrow">Thể nên ôn lại</span><div>${theYeu.map(t => esc(CT_THE[t][0])).join(", ")}</div>${done ? `<small>Lần làm lại, mỗi thể này được hỏi thêm hai câu.</small>` : ""}</div>`;
       h += `<div class="np-tools"><button class="btn" id="npLai" type="button">Làm lại với câu khác</button></div></div>`;
       document.getElementById("res").innerHTML = h;
       if (done) {
-        saved.score = x + d; saved.done = true; save();
+        saved.score = tong; saved.done = true; save();
         store.set(cfg.key + "-yeu", [...weak].map(g => g.id));
-        document.querySelector("#res .result").insertAdjacentHTML("beforeend", runInfo(cfg.key, saved, n + nd));
+        store.set(cfg.key + "-yeuchia", theYeu);
+        document.querySelector("#res .result").insertAdjacentHTML("beforeend", runInfo(cfg.key, saved, het));
         // Đề ngữ pháp không bấm giờ: bỏ ô "Thời gian" của phần kết quả chung.
         document.querySelectorAll("#res .result .eyebrow").forEach(e => { if (e.textContent === "Thời gian") e.parentElement.remove(); });
         save();
@@ -225,5 +277,5 @@
     }
     if (saved.xepDone) chamXep();
     if (saved.dich) veDich();
-    if (saved.xepDone || saved.dich) ketQua();
+    if (saved.xepDone || saved.dich || chiaXong()) ketQua();
   }
