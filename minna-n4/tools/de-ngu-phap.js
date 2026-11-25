@@ -1,8 +1,9 @@
   /* ---------- Đề ngữ pháp (dùng chung cho trang N5 và N4) ----------
-     Mỗi mẫu ngữ pháp của đề có hai câu soạn mới (data/dich-*.json: [tiếng Việt, tiếng Nhật, gợi ý từ]).
-     Phần 1 · Sắp xếp câu: bấm các mảnh theo thứ tự, máy chấm ngay.
-     Phần 2 · Dịch Việt → Nhật: viết ra giấy, chụp ảnh tải lên; server của app gửi ảnh cho Claude đọc và chấm từng câu.
-     Mỗi lần "Làm lại" thì hai câu đổi vai cho nhau, nên lần sau gặp câu khác. */
+     Mỗi mẫu ngữ pháp có 5 câu soạn mới (data/dich-*.json, dich-them-*.json: [tiếng Việt, tiếng Nhật, gợi ý từ]).
+     Phần 1 · Sắp xếp câu: mỗi mẫu một câu, bấm các mảnh theo thứ tự, máy chấm ngay.
+     Phần 2 · Dịch Việt → Nhật: mỗi mẫu cfg.soDich câu, cộng thêm một câu cho mẫu đã sai ở lần làm trước; viết ra giấy,
+     chụp ảnh tải lên, server của app gửi ảnh cho Claude đọc và chấm từng câu.
+     Mỗi lần "Làm lại" thì dịch sang những câu tiếp theo, nên lần sau gặp câu khác. */
   function npCss() {
     if (document.getElementById("np-css")) return;
     const st = document.createElement("style");
@@ -74,13 +75,22 @@
     saved.lan = saved.lan || 0; saved.xep = saved.xep || {};
     const save = () => store.set(cfg.key, saved);
     const mau = cfg.lessons.flatMap(l => (D.grammar[l] || []).map(g => Object.assign({ bai: l }, g))).filter(g => (D.dich[g.id] || []).length);
-    const cau = (g, k) => { const v = D.dich[g.id]; return { vi: v[(saved.lan + k) % v.length][0], ja: v[(saved.lan + k) % v.length][1], gy: v[(saved.lan + k) % v.length][2] }; };
+    const soDich = cfg.soDich || 1;
+    // Mẫu sai ở lần làm trước: phần 2 hỏi thêm một câu cho mẫu đó.
+    const yeuTruoc = new Set(store.get(cfg.key + "-yeu") || []);
+    // Mỗi lần làm dịch sang nhóm câu tiếp theo (bước = số câu dùng mỗi lần; không để bước chia hết cho số câu của mẫu).
+    const cau = (g, k) => {
+      const v = D.dich[g.id], buoc = (soDich + 1) % v.length || 1, x = v[(saved.lan * buoc + k) % v.length];
+      return { vi: x[0], ja: x[1], gy: x[2] };
+    };
+    const dsDich = [];
+    mau.forEach(g => { const m = soDich + (yeuTruoc.has(g.id) ? 1 : 0); for (let k = 1; k <= m; k++) dsDich.push({ g, c: cau(g, k), them: k > soDich }); });
     const manh = s => s.split(/\s+/).filter(Boolean);
     let anh = [];  // ảnh bài làm (chỉ giữ trong trang, không lưu)
 
     let h = cfg.head + `<div class="test-head"><div><p class="eyebrow">${esc(cfg.eyebrow)}</p><h1>${esc(cfg.title)}</h1></div>
-      <div class="badges"><span class="badge">${mau.length} mẫu ngữ pháp</span><span class="badge">Lần làm ${saved.lan + 1}</span></div></div>
-      <div class="np-intro">Đề chỉ kiểm tra <b>ngữ pháp</b>: mỗi mẫu có một câu sắp xếp và một câu dịch. Từ vựng đã cho sẵn trong gợi ý, bạn chỉ cần dùng đúng mẫu.
+      <div class="badges"><span class="badge">${mau.length} mẫu ngữ pháp</span><span class="badge">${mau.length + dsDich.length} câu</span><span class="badge">Lần làm ${saved.lan + 1}</span></div></div>
+      <div class="np-intro">Đề chỉ kiểm tra <b>ngữ pháp</b>: mỗi mẫu có một câu sắp xếp và ${soDich} câu dịch${yeuTruoc.size ? `, mẫu sai ở lần trước (${yeuTruoc.size} mẫu) được hỏi thêm một câu` : ""}. Từ vựng đã cho sẵn trong gợi ý, bạn chỉ cần dùng đúng mẫu.
       <br><b>Phần 1</b> làm ngay trên trang, máy chấm. <b>Phần 2</b> viết câu tiếng Nhật ra giấy (ghi số câu), chụp ảnh rồi tải lên để Claude đọc và chấm.
       <br>Bấm <b>Làm lại</b> để làm lần mới với câu khác.</div>
       <div id="res"></div>
@@ -94,8 +104,8 @@
       <section class="sec np-dich"><h3>Phần 2 · Dịch sang tiếng Nhật (viết ra giấy)</h3>
       <p class="instr">Viết câu tiếng Nhật cho từng câu, ghi rõ số câu. Viết kanji hay hiragana đều được. Xong thì chụp ảnh (chụp thẳng, đủ sáng) và tải lên.</p>
       <div class="np-tools"><label class="toggle"><input type="checkbox" id="npMau"> Hiện tên mẫu cần dùng</label><button class="btn" id="npIn" type="button">🖨 In phiếu câu hỏi</button></div>
-      <div class="np-print"><ol class="np-list">${mau.map((g, i) => { const c = cau(g, 1); return `<li data-g="${g.id}"><span class="so">${i + 1}.</span>${esc(c.vi)}
-        ${c.gy ? `<br><small>Gợi ý từ: ${esc(c.gy)}</small>` : ""} <span class="mau">· mẫu ${esc(g.id)}: ${esc(g.p)}</span><div class="np-kq"></div></li>`; }).join("")}</ol></div>
+      <div class="np-print"><ol class="np-list">${dsDich.map(({ g, c, them }, i) => `<li data-g="${g.id}"><span class="so">${i + 1}.</span>${esc(c.vi)}
+        ${c.gy ? `<br><small>Gợi ý từ: ${esc(c.gy)}</small>` : ""} <span class="mau">· mẫu ${esc(g.id)}: ${esc(g.p)}</span>${them ? ` <small>(ôn lại mẫu sai lần trước)</small>` : ""}<div class="np-kq"></div></li>`).join("")}</ol></div>
       <div class="np-up"><label class="btn" for="npFile">📷 Chọn ảnh bài làm</label><input type="file" id="npFile" accept="image/*" multiple hidden>
         <button class="btn primary" id="npCham" type="button" disabled>Chấm phần 2 bằng Claude</button><span class="np-status" id="npSt"></span></div>
       <div class="np-thumbs" id="npThumbs"></div></section>` + cfg.pager;
@@ -153,7 +163,7 @@
     function veDich() {
       const r = saved.dich; if (!r) return;
       app.querySelectorAll(".np-list li").forEach((li, i) => {
-        const x = r.items.find(y => y.so === i + 1), g = mau[i], c = cau(g, 1);
+        const x = r.items.find(y => y.so === i + 1), c = dsDich[i].c;
         const [cls, chu] = NHAN[(x && x.ket_qua) || "bo_trong"];
         li.querySelector(".np-kq").innerHTML = `<span class="${cls}">${chu}.</span>` +
           (x && x.doc_duoc ? ` Máy đọc được: <span class="doc">${esc(x.doc_duoc)}</span>` : "") +
@@ -165,7 +175,7 @@
     nut.addEventListener("click", async () => {
       if (!anh.length) return;
       nut.disabled = true; st.textContent = "Claude đang đọc và chấm bài (khoảng 20–60 giây)…";
-      const items = mau.map((g, i) => { const c = cau(g, 1); return { so: i + 1, vi: c.vi, mau: g.p, y_nghia: g.m, dap_an: c.ja }; });
+      const items = dsDich.map(({ g, c }, i) => ({ so: i + 1, vi: c.vi, mau: g.p, y_nghia: g.m, dap_an: c.ja }));
       try {
         const r = await fetch("/api/cham-ngu-phap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cap: cfg.cap, items, images: anh }) });
         const j = await r.json().catch(() => ({ loi: "Server trả về lỗi " + r.status }));
@@ -181,11 +191,11 @@
 
     /* ----- Kết quả chung ----- */
     function ketQua() {
-      const n = mau.length, x = saved.xepDone ? saved.xepDung || 0 : null;
+      const n = mau.length, nd = dsDich.length, x = saved.xepDone ? saved.xepDung || 0 : null;
       let d = null, weak = new Set();
       if (saved.dich) {
         d = 0;
-        mau.forEach((g, i) => {
+        dsDich.forEach(({ g }, i) => {
           const it = saved.dich.items.find(y => y.so === i + 1), k = it ? it.ket_qua : "bo_trong";
           d += k === "dung" ? 1 : k === "gan_dung" ? 0.5 : 0;
           if (k !== "dung") weak.add(g);
@@ -193,16 +203,17 @@
       }
       if (saved.xepDone) mau.forEach(g => { if (!xepDung(g)) weak.add(g); });
       const done = x !== null && d !== null;
-      let h = `<div class="result"><div><span class="eyebrow">Kết quả</span><div class="score">${done ? `${x + d}/${2 * n} · ${Math.round(100 * (x + d) / (2 * n))}%` : "Chưa xong"}</div></div>
-        <div class="parts"><span>Sắp xếp <b>${x === null ? "—" : `${x}/${n}`}</b></span><span>Dịch <b>${d === null ? "—" : `${d}/${n}`}</b></span></div>`;
+      let h = `<div class="result"><div><span class="eyebrow">Kết quả</span><div class="score">${done ? `${x + d}/${n + nd} · ${Math.round(100 * (x + d) / (n + nd))}%` : "Chưa xong"}</div></div>
+        <div class="parts"><span>Sắp xếp <b>${x === null ? "—" : `${x}/${n}`}</b></span><span>Dịch <b>${d === null ? "—" : `${d}/${nd}`}</b></span></div>`;
       if (saved.dich && saved.dich.nhan_xet) h += `<div><span class="eyebrow">Nhận xét</span><div>${esc(saved.dich.nhan_xet)}</div></div>`;
-      if (weak.size) h += `<div><span class="eyebrow">Mẫu nên ôn lại</span><div class="weak">${[...weak].map(g => `<a href="#bai-${g.bai}" title="${esc(g.p)}">${esc(g.id)}</a>`).join("")}</div></div>`;
+      if (weak.size) h += `<div><span class="eyebrow">Mẫu nên ôn lại</span><div class="weak">${[...weak].map(g => `<a href="#bai-${g.bai}" title="${esc(g.p)}">${esc(g.id)}</a>`).join("")}</div>${done ? `<small>Lần làm lại, mỗi mẫu này được hỏi thêm một câu.</small>` : ""}</div>`;
       else if (done) h += `<div>Dùng đúng mọi mẫu ngữ pháp. Rất tốt!</div>`;
       h += `<div class="np-tools"><button class="btn" id="npLai" type="button">Làm lại với câu khác</button></div></div>`;
       document.getElementById("res").innerHTML = h;
       if (done) {
         saved.score = x + d; saved.done = true; save();
-        document.querySelector("#res .result").insertAdjacentHTML("beforeend", runInfo(cfg.key, saved, 2 * n));
+        store.set(cfg.key + "-yeu", [...weak].map(g => g.id));
+        document.querySelector("#res .result").insertAdjacentHTML("beforeend", runInfo(cfg.key, saved, n + nd));
         // Đề ngữ pháp không bấm giờ: bỏ ô "Thời gian" của phần kết quả chung.
         document.querySelectorAll("#res .result .eyebrow").forEach(e => { if (e.textContent === "Thời gian") e.parentElement.remove(); });
         save();
