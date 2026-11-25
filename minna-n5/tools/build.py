@@ -47,7 +47,8 @@ import glob
 # Câu dịch soạn mới cho đề ngữ pháp: {mã mẫu: [[tiếng Việt, tiếng Nhật, gợi ý từ], ...]}.
 dich = {}
 for _f in sorted(glob.glob(os.path.join(DATA, "dich-*.json"))):
-    dich.update(json.load(open(_f, encoding="utf-8")))
+    for _k, _v in json.load(open(_f, encoding="utf-8")).items():
+        dich.setdefault(_k, []).extend(_v)  # dich-*.json và dich-them-*.json cộng dồn câu cho cùng một mẫu
 so_sanh = json.load(open(os.path.join(HERE, "..", "..", "minna-n4", "data", "so-sanh-n5-n4.json"), encoding="utf-8"))
 payload = json.dumps({"soSanh": so_sanh, "vocab": vocab, "grammar": check.grammar, "tests": tests, "coverage": coverage, "luyen": luyen.build(check), "dich": dich},
                      ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
