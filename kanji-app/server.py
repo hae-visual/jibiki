@@ -6,6 +6,7 @@
 - /api/dich?q=…: dịch máy cả câu Nhật → Việt (gửi câu tới Google Translate) cho khung quét chữ
 - /api/notes: ghi chú theo ngày, mỗi ngày một file notes/YYYY-MM-DD.md (chỉ trên máy, không đưa lên repo)
 - /api/dong-gop (POST): ghi một dòng vào repo nhật ký học (nhat-ky/), commit và push để tích một ô contribution trên GitHub
+- /api/cham-ngu-phap (POST): gửi ảnh bài dịch viết tay của đề ngữ pháp Minna cho Claude chấm (cần ANTHROPIC_API_KEY)
 Cách dùng: py server.py   (hoặc bấm đúp start.bat)
 """
 import datetime, http.server, json, os, re, socket, socketserver, subprocess, sys, threading
@@ -108,6 +109,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         (toạ độ trên khung 300×300, t là mili giây từ lúc đặt bút nét đầu). Trả về danh sách chữ gợi ý."""
         if urllib.parse.urlparse(self.path).path == "/api/dong-gop":
             return self.dong_gop()
+        if urllib.parse.urlparse(self.path).path == "/api/cham-ngu-phap":
+            return self.cham_ngu_phap()
         if urllib.parse.urlparse(self.path).path != "/api/viet":
             return self.send_error(404)
         length = int(self.headers.get("Content-Length") or 0)
@@ -145,6 +148,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.send_error(400)
         ok, why = dong_gop(text, bool(data.get("once")))
         self.send_body(200, json.dumps({"ok": ok, "why": why}, ensure_ascii=False), "application/json; charset=utf-8")
+
+    def cham_ngu_phap(self):
+        """Body JSON {"cap": "n4"|"n5", "items": [...], "images": ["data:image/jpeg;base64,..."]}: Claude đọc ảnh bài
+        dịch viết tay và chấm từng câu (xem cham_ngu_phap.py). Chỉ nhận từ chính app, như /api/dong-gop."""
+        origin = self.headers.get("Origin")
+        if not (self.headers.get("Content-Type") or "").startswith("application/json") or \
+                (origin and origin not in (f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}")):
+            return self.send_error(403)
+        length = int(self.headers.get("Content-Length") or 0)
+        if not length or length > 30_000_000:
+            return self.send_error(413 if length else 400)
+        import cham_ngu_phap
+        try:
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+            kq = cham_ngu_phap.cham(data.get("cap"), data.get("items") or [], data.get("images") or [])
+        except cham_ngu_phap.LoiCham as e:
+            return self.send_body(400, json.dumps({"loi": str(e)}, ensure_ascii=False), "application/json; charset=utf-8")
+        except (ValueError, KeyError, TypeError):
+            return self.send_body(400, json.dumps({"loi": "Dữ liệu gửi lên không đúng."}, ensure_ascii=False), "application/json; charset=utf-8")
+        self.send_body(200, json.dumps(kq, ensure_ascii=False), "application/json; charset=utf-8")
 
     def do_PUT(self):
         # Chỉ nhận PUT từ chính app (trình duyệt chặn PUT khác nguồn vì server không trả CORS).
