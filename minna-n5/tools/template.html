@@ -350,20 +350,20 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 640px; }
     setNav("home");
     let h = `<p class="eyebrow">Bộ tài liệu JLPT N5 theo giáo trình</p>
       <h1>みんなの日本語 · 25 bài</h1>
-      <p class="lede">Từ vựng và ngữ pháp của 25 bài Minna no Nihongo Sơ cấp 1, cùng 5 đề kiểm tra theo dạng đề JLPT N5. Mỗi đề gộp 5 bài và dùng toàn bộ từ vựng, mẫu ngữ pháp của 5 bài đó.</p>
+      <p class="lede">Từ vựng và ngữ pháp của 25 bài Minna no Nihongo Sơ cấp 1, cùng 5 đề ngữ pháp. Mỗi đề gộp 5 bài: sắp xếp câu và dịch Việt → Nhật cho từng mẫu, phần dịch viết tay rồi chụp ảnh cho Claude chấm.</p>
       <div class="stats">
         <div><b>25</b><span>bài học</span></div>
         <div><b>${vocabCount.toLocaleString("vi")}</b><span>từ vựng</span></div>
         <div><b>${grammarCount}</b><span>mẫu ngữ pháp</span></div>
-        <div><b>5</b><span>đề · ${qCount} câu</span></div>
+        <div><b>5</b><span>đề · ${2 * grammarCount} câu ngữ pháp</span></div>
       </div>
       <h2>Đề kiểm tra</h2><div class="test-cards">`;
     D.tests.forEach((t, i) => {
-      const c = D.coverage[i], n = t.sections.reduce((a, s) => a + s.items.length, 0);
+      let n = 0; for (let b = t.lessons[0]; b <= t.lessons[1]; b++) n += 2 * D.grammar[b].length;
       const saved = store.get("minna-n5-de-" + t.id);
-      const st = saved && saved.done ? ` · đã làm: ${saved.score}/${n}` : "";
+      const st = saved && saved.done && !saved.ans ? ` · đã làm: ${saved.score}/${n}` : "";
       h += `<a class="test-card" href="#de-${t.id}"><b>${t.title} · Bài ${t.lessons[0]}–${t.lessons[1]}</b>
-        <small>${n} câu${st}</small><small>Dùng ${c.vocab[0]}/${c.vocab[1]} từ · ${c.grammar[0]}/${c.grammar[1]} mẫu ngữ pháp</small></a>`;
+        <small>${n} câu${st}</small><small>${n / 2} mẫu ngữ pháp · sắp xếp + dịch</small></a>`;
     });
     h += `</div><h2>Bài học</h2>`;
     D.tests.forEach(t => {
@@ -373,7 +373,7 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 640px; }
       }
       h += `</div></section>`;
     });
-    h += `<h2>Cách dùng</h2><p class="note">Học từ vựng và ngữ pháp của từng bài trước. Học xong 5 bài thì làm đề tương ứng rồi bấm <b>Nộp bài</b> để xem điểm, lời giải và các mẫu ngữ pháp cần ôn lại. Danh sách từ vựng lấy từ deck Anki "Minna no Nihongo 1" của bạn. Câu trả lời được lưu trên trình duyệt này để bạn làm tiếp lần sau.</p>`;
+    h += `<h2>Cách dùng</h2><p class="note">Học từ vựng và ngữ pháp của từng bài trước. Học xong 5 bài thì làm đề ngữ pháp tương ứng: phần sắp xếp chấm ngay, phần dịch viết ra giấy rồi chụp ảnh để Claude chấm và chỉ ra mẫu cần ôn lại. Danh sách từ vựng lấy từ deck Anki "Minna no Nihongo 1" của bạn. Câu trả lời được lưu trên trình duyệt này để bạn làm tiếp lần sau.</p>`;
     app.innerHTML = h;
   }
 
@@ -726,13 +726,25 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 640px; }
     if (el) [0, 400].forEach(t => setTimeout(() => el.scrollIntoView(), t));  // lần 2: chờ phông chữ dựng xong
   }
 
+/*__DE_NP__*/
+
+  function deN5(id) {
+    const t = D.tests.find(x => x.id === id), ls = [];
+    for (let b = t.lessons[0]; b <= t.lessons[1]; b++) ls.push(b);
+    deNguPhap({ key: "minna-n5-de-" + id, cap: "n5", title: `${t.title} · ngữ pháp`, eyebrow: `Bài ${t.lessons[0]}–${t.lessons[1]} · luyện dùng mẫu ngữ pháp`, lessons: ls,
+      head: `<nav class="lesson-strip" aria-label="Chọn đề">${D.tests.map(x => `<a href="#de-${x.id}" ${x.id === id ? 'aria-current="page"' : ""}>${x.title}</a>`).join("")}</nav>`,
+      pager: `<div class="pager"><a class="btn" href="#bai-${t.lessons[0]}">← Ôn bài ${t.lessons[0]}–${t.lessons[1]}</a>${id < 5 ? `<a class="btn" href="#de-${id + 1}">Đề ${id + 1} →</a>` : ""}</div>` });
+  }
+
   function route() {
     app.onchange = null;
+    app.onclick = null;
+    app.classList.remove("np-showmau");
     clearInterval(window.__tmr);
     const h = location.hash.replace("#", "");
     let m;
     if ((m = h.match(/^bai-(\d+)$/)) && +m[1] >= 1 && +m[1] <= 25) lesson(+m[1]);
-    else if ((m = h.match(/^de-(\d)$/)) && +m[1] >= 1 && +m[1] <= 5) test(+m[1]);
+    else if ((m = h.match(/^de-(\d)$/)) && +m[1] >= 1 && +m[1] <= 5) deN5(+m[1]);
     else if ((m = h.match(/^luyen-(\d+)$/)) && D.luyen[m[1]]) test(+m[1], true);
     else if ((m = h.match(/^so-sanh(?:\/([\w-]+))?$/))) soSanh(m[1]);
     else home();
