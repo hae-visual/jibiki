@@ -350,13 +350,13 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 660px; }
         <div><b>${words.toLocaleString("vi")}</b><span>từ vựng</span></div>
         <div><b>${sum(b => (D.kanji[b] || []).length)}</b><span>kanji N4</span></div>
         <div><b>${sum(b => D.grammar[b].length)}</b><span>mẫu ngữ pháp</span></div>
-        <div><b>${sum(b => 2 * D.grammar[b].length)}</b><span>câu ngữ pháp</span></div>
+        <div><b>${sum(b => 5 * D.grammar[b].length)}</b><span>câu ngữ pháp</span></div>
       </div>
       <h2>Bài học và đề kiểm tra</h2><div class="lessons">`;
     L.forEach(b => {
       const saved = store.get("minna-n4-de-" + b);
       const ks = (D.kanji[b] || []).map(x => x.k).join("");
-      h += `<div class="chip"><div class="row"><a class="jp" href="#bai-${b}">第${b}課</a>${saved && saved.done && !saved.ans ? `<span class="done">${saved.score}/${2 * D.grammar[b].length}</span>` : ""}</div>
+      h += `<div class="chip"><div class="row"><a class="jp" href="#bai-${b}">第${b}課</a>${saved && saved.done && !saved.ans ? `<span class="done">${saved.score}</span>` : ""}</div>
         <small>${D.vocab[b].length} từ · ${D.grammar[b].length} mẫu · ${(D.kanji[b] || []).length} kanji</small>
         <span class="kj">${ks ? esc(ks) : "—"}</span>
         <a class="go" href="#de-${b}">Làm đề bài ${b} →</a></div>`;
@@ -705,7 +705,7 @@ table.vocab { width: 100%; border-collapse: collapse; min-width: 660px; }
 /*__DE_NP__*/
 
   function deN4(b) {
-    deNguPhap({ key: "minna-n4-de-" + b, cap: "n4", title: `Đề ngữ pháp bài ${b}`, eyebrow: `Bài ${b} · luyện dùng mẫu ngữ pháp`, lessons: [b], head: strip(b, "de"),
+    deNguPhap({ key: "minna-n4-de-" + b, cap: "n4", soDich: 3, title: `Đề ngữ pháp bài ${b}`, eyebrow: `Bài ${b} · luyện dùng mẫu ngữ pháp`, lessons: [b], head: strip(b, "de"),
       pager: `<div class="pager"><a class="btn" href="#bai-${b}">← Ôn bài ${b}</a><a class="btn" href="#luyen-${b}">Luyện tập bài ${b}</a>${b < 50 ? `<a class="btn" href="#de-${b + 1}">Đề bài ${b + 1} →</a>` : ""}</div>` });
   }
 
